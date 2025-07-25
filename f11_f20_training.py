@@ -66,16 +66,39 @@ class PrototypeClassifier:
         Returns:
             numpy.ndarray: Predicted labels.
         """
+        # predictions = []
+        # for feature in features:  # Iterate over features
+        #     # Compute distances from the feature to all prototypes
+        #     distances = {
+        #         label: self.euclidean_distance(feature, prototype)
+        #         for label, prototype in self.prototypes.items()
+        #     }
+        #     # Find the label of the nearest prototype
+        #     predictions.append(min(distances, key=distances.get))
+        # return np.array(predictions)  # Return predictions as a numpy array
         predictions = []
-        for feature in features:  # Iterate over features
-            # Compute distances from the feature to all prototypes
+        confidences = []
+        beta=1.0
+        for feature in features:
             distances = {
                 label: self.euclidean_distance(feature, prototype)
                 for label, prototype in self.prototypes.items()
             }
-            # Find the label of the nearest prototype
-            predictions.append(min(distances, key=distances.get))
-        return np.array(predictions)  # Return predictions as a numpy array
+            # Softmax over negative distances
+            labels = list(distances.keys())
+            dists = np.array(list(distances.values()))
+            scores = np.exp(-beta * dists)
+            probs = scores / np.sum(scores)
+            
+            # Get predicted label and its confidence
+            best_idx = np.argmax(probs)
+            predicted_label = labels[best_idx]
+            confidence = probs[best_idx]
+            
+            predictions.append(predicted_label)
+            confidences.append(confidence)
+            
+        return np.array(predictions), np.array(confidences)
 
     def update_classifier(self, features, pseudo_labels):
         """
@@ -90,11 +113,14 @@ class PrototypeClassifier:
                 self.prototypes[pseudo_label] = feature
                 self.class_counts[pseudo_label] = 1
             else:
+                # alpha=0.4
                 # Update prototype for an existing pseudo-class
                 self.prototypes[pseudo_label] = (
                     self.prototypes[pseudo_label] * self.class_counts[pseudo_label] + feature
                 ) / (self.class_counts[pseudo_label] + 1)
                 self.class_counts[pseudo_label] += 1  # Increment the count for the pseudo-class
+                # self.prototypes[pseudo_label] = (
+                # (1 - alpha) * self.prototypes[pseudo_label] + alpha * feature)
 
 def save_model(model, path):
     """
@@ -143,8 +169,10 @@ def task1_train_features():
         # Note: Since labels are unavailable, pseudo-labels will be used for training
 
         # Generate pseudo-labels using the current state of the classifier
-        pseudo_labels = classifier.predict(features)
-
+        pseudo_labels,confidences = classifier.predict(features)
+        mask=confidences>0.8
+        pseudo_labels=pseudo_labels[mask]
+        features=features[mask]
         # Update the classifier incrementally with the new features and pseudo-labels
         classifier.update_classifier(features, pseudo_labels)
 

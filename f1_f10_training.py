@@ -66,16 +66,39 @@ class PrototypeClassifier:
         Returns:
             numpy.ndarray: Predicted labels.
         """
+        # predictions = []
+        # for feature in features:  # Iterate over features
+        #     # Compute distances from the feature to all prototypes
+        #     distances = {
+        #         label: self.euclidean_distance(feature, prototype)
+        #         for label, prototype in self.prototypes.items()
+        #     }
+        #     # Find the label of the nearest prototype
+        #     predictions.append(min(distances, key=distances.get))
+        # return np.array(predictions)  # Return predictions as a numpy array
         predictions = []
-        for feature in features:  # Iterate over features
-            # Compute distances from the feature to all prototypes
+        confidences = []
+        beta=1.0
+        for feature in features:
             distances = {
                 label: self.euclidean_distance(feature, prototype)
                 for label, prototype in self.prototypes.items()
             }
-            # Find the label of the nearest prototype
-            predictions.append(min(distances, key=distances.get))
-        return np.array(predictions)  # Return predictions as a numpy array
+            # Softmax over negative distances
+            labels = list(distances.keys())
+            dists = np.array(list(distances.values()))
+            scores = np.exp(-beta * dists)
+            probs = scores / np.sum(scores)
+            
+            # Get predicted label and its confidence
+            best_idx = np.argmax(probs)
+            predicted_label = labels[best_idx]
+            confidence = probs[best_idx]
+            
+            predictions.append(predicted_label)
+            confidences.append(confidence)
+            
+        return np.array(predictions), np.array(confidences)
 
     def update_classifier(self, features, pseudo_labels):
         """
@@ -159,7 +182,10 @@ def task1_train_features():
         else:
             # Use pseudo-labels if labels are not provided; otherwise, use true labels
             if labels is None:
-                pseudo_labels = classifier.predict(features)
+                pseudo_labels,confidences = classifier.predict(features)
+                mask=confidences>0.8
+                features=features[mask]
+                pseudo_labels=pseudo_labels[mask]
                 # print(f"Dataset {i} does not have labels. Using pseudo-labels.")
             else:
                 pseudo_labels = labels
